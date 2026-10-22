@@ -11,6 +11,8 @@ downloads, and only from the public URLs listed below.
 
 import argparse, csv, glob, json, os, re, shutil, statistics, subprocess, sys, time, traceback, urllib.request
 
+from edocr2 import textlayer
+
 PACKAGE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(PACKAGE)
 MODELS = os.path.join(PACKAGE, "models")
@@ -126,8 +128,9 @@ def setup(args):
 
 # ───────────────────────── run ─────────────────────────
 
-def pages(inputs, dpi):
-    """(name, BGR image) for every page of every PDF and every image file under the inputs."""
+def pages(inputs, dpi, use_text=True):
+    """(name, BGR image, text runs or None) for every page of every PDF and every image file
+    under the inputs. A PDF page with its own text gives its runs, unless use_text is False."""
     import cv2, numpy as np
     files = []
     for i in inputs:
@@ -143,9 +146,10 @@ def pages(inputs, dpi):
             doc = pypdfium2.PdfDocument(path)
             for n, page in enumerate(doc):
                 gray = np.array(page.render(scale=dpi / 72, grayscale=True).to_pil())
-                yield (stem if len(doc) == 1 else f"{stem}_p{n + 1}"), cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+                runs = textlayer.text_runs(page, dpi / 72) if use_text and textlayer.has_text(page) else None
+                yield (stem if len(doc) == 1 else f"{stem}_p{n + 1}"), cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR), runs
         else:
-            yield stem, cv2.imread(path)
+            yield stem, cv2.imread(path), None
 
 
 def load_models(device, keras_detector):
@@ -245,12 +249,10 @@ def run(args):
         sys.exit("Tesseract not found: run doctor")
     if missing_languages():
         sys.exit(f"Tesseract languages missing ({', '.join(missing_languages())}): run setup")
-    t0 = time.time()
-    models = load_models("cpu" if args.cpu else None, args.keras_detector)
-    print(f"models loaded in {time.time() - t0:.0f} s", flush=True)
+    models = None   # loaded at the first page that needs recognising
 
-    rows, failed, seconds = [], 0, []
-    for name, img in pages(args.inputs, args.dpi):
+    rows, failed, seconds, from_text = [], 0, [], 0
+    for name, img, runs in pages(args.inputs, args.dpi, use_text=not args.ocr):
         out_json = os.path.join(args.out, name + ".json")
         if args.skip_done and os.path.exists(out_json):
             continue
@@ -258,7 +260,19 @@ def run(args):
         try:
             if img is None:
                 raise ValueError("could not read the image")
-            r = read_page(img, models)
+            if runs is not None:
+                full = textlayer.read_text_page(img, runs)
+                r = {k: [i["text"] for i in v] if k != "tables" else v for k, v in full.items()}
+                r["source"] = "text layer"
+                from_text += 1
+            else:
+                if models is None:
+                    t0 = time.time()
+                    models = load_models("cpu" if args.cpu else None, args.keras_detector)
+                    print(f"models loaded in {time.time() - t0:.0f} s", flush=True)
+                    t = time.time()
+                r = read_page(img, models)
+                r["source"] = "ocr"
             r["seconds"] = round(time.time() - t, 1)
             with open(out_json, "w", encoding="utf-8") as f:
                 json.dump(r, f, ensure_ascii=False, indent=1)
@@ -282,7 +296,7 @@ def run(args):
     def count(key, test):
         return sum(1 for r in rows if r[key] is not None and test(r[key]))
     totals = {
-        "pagesRead": len(rows), "pagesFailed": failed,
+        "pagesRead": len(rows), "pagesFailed": failed, "pagesReadFromTheirTextLayer": from_text,
         "medianSecondsPerPage": statistics.median(seconds) if seconds else None,
         "pagesWith": {
             "GD&T frames": count("frames", lambda v: v > 0),
@@ -314,5 +328,6 @@ def main(argv=None):
     r.add_argument("--cpu", action="store_true", help="run the detector on the CPU even when there is a GPU")
     r.add_argument("--keras-detector", action="store_true", help="use the original TensorFlow detector (slow)")
     r.add_argument("--skip-done", action="store_true", help="skip pages already in --out")
+    r.add_argument("--ocr", action="store_true", help="recognise every page, even PDF pages that carry their own text")
     args = p.parse_args(argv)
     return {"doctor": doctor, "setup": setup, "run": run}[args.command](args)
