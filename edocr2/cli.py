@@ -166,21 +166,36 @@ def load_models(device, keras_detector):
     return recognizer_gdt, recognizer_dim, alphabet_dim, detector
 
 
-def read_page(img, models, language="eng"):
-    """The steps of test_drawing.py, without the language-model ones."""
+def read_page(img, models, language="eng", boxes=False, max_img_size=1048):
+    """The steps of test_drawing.py, without the language-model ones. With boxes=True each item
+    is {"text", "box"}, the box as four corner points in page pixels."""
+    import numpy as np
     from edocr2 import tools
     recognizer_gdt, recognizer_dim, alphabet_dim, detector = models
     _, frame, gdt_boxes, tables, dim_boxes = tools.layer_segm.segment_img(img, autoframe=True, frame_thres=0.7, GDT_thres=0.02, binary_thres=127)
     work = img.copy()
     table_results, _, work = tools.ocr_pipelines.ocr_tables(tables, work, language)
-    gdt_results, _, work = tools.ocr_pipelines.ocr_gdt(work, gdt_boxes, recognizer_gdt)
+    gdt_results, gdt_blocks, work = tools.ocr_pipelines.ocr_gdt(work, gdt_boxes, recognizer_gdt)
     if frame:
         work = work[frame.y: frame.y + frame.h, frame.x: frame.x + frame.w]
     dimensions, other_info, _, _ = tools.ocr_pipelines.ocr_dimensions(
-        work, detector, recognizer_dim, alphabet_dim, frame, dim_boxes, cluster_thres=20, max_img_size=1048, language=language, backg_save=False)
-    return {"gdt": [g[0] for g in gdt_results],
-            "dimensions": [d[0] for d in dimensions],
-            "other": [o[0] for o in other_info],
+        work, detector, recognizer_dim, alphabet_dim, frame, dim_boxes, cluster_thres=20, max_img_size=max_img_size, language=language, backg_save=False)
+    if not boxes:
+        return {"gdt": [g[0] for g in gdt_results],
+                "dimensions": [d[0] for d in dimensions],
+                "other": [o[0] for o in other_info],
+                "tables": [" ".join(t["text"] for t in table) for table in table_results]}
+    # dimensions are found inside the drawing frame; put their boxes back on the page
+    dx, dy = (frame.x, frame.y) if frame else (0, 0)
+    on_page = lambda b: (np.asarray(b, dtype=float) + [dx, dy]).tolist()
+    def block_box(block):
+        cells = [c for v in block.values() for c in v]
+        x0, y0 = min(c.x for c in cells), min(c.y for c in cells)
+        x1, y1 = max(c.x + c.w for c in cells), max(c.y + c.h for c in cells)
+        return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
+    return {"gdt": [{"text": g[0], "box": block_box(b)} for g, b in zip(gdt_results, gdt_blocks)],
+            "dimensions": [{"text": d[0], "box": on_page(d[1])} for d in dimensions],
+            "other": [{"text": o[0], "box": on_page(o[1])} for o in other_info],
             "tables": [" ".join(t["text"] for t in table) for table in table_results]}
 
 
