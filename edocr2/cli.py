@@ -163,14 +163,16 @@ def pages(inputs, dpi, use_text=True):
             yield stem, cv2.imread(path), None
 
 
-def load_models(device, keras=False):
+def load_models(device, keras=False, folder=None):
     """(GD&T recognizer, dimension recognizer, its alphabet, detector). PyTorch unless keras is
-    set, which gives the original TensorFlow models."""
+    set, which gives the original TensorFlow models; `folder` holds other PyTorch recognizers
+    (recognizer_gdts.pt, recognizer_dimensions_2.pt)."""
     if not keras:
         from edocr2.keras_ocr.craft import TorchDetector
         from edocr2.torch_recognizer import TorchRecognizer
-        recognizer_gdt = TorchRecognizer.load(os.path.join(MODELS, "recognizer_gdts.pt"), device)
-        recognizer_dim = TorchRecognizer.load(os.path.join(MODELS, "recognizer_dimensions_2.pt"), device)
+        folder = folder or MODELS
+        recognizer_gdt = TorchRecognizer.load(os.path.join(folder, "recognizer_gdts.pt"), device)
+        recognizer_dim = TorchRecognizer.load(os.path.join(folder, "recognizer_dimensions_2.pt"), device)
         return recognizer_gdt, recognizer_dim, recognizer_dim.alphabet, TorchDetector(device=device)
     os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
     import logging
@@ -188,9 +190,19 @@ def load_models(device, keras=False):
     return recognizer_gdt, recognizer_dim, alphabet_dim, Detector()
 
 
-def read_page(img, models, language="eng", boxes=False, max_img_size=1048):
-    """The steps of test_drawing.py, without the language-model ones. With boxes=True each item
-    is {"text", "box"}, the box as four corner points in page pixels."""
+def read_page(img, models, language="eng", boxes=False, max_img_size=1048, fixes=None):
+    """The steps of test_drawing.py, without the language-model ones, then the corrections in
+    edocr2/postfix.py (all of them unless `fixes` names which; () for none). With boxes=True
+    each item is {"text", "box"}, the box as four corner points in page pixels."""
+    from edocr2 import postfix
+    r = _read_page(img, models, language, max_img_size)
+    postfix.apply(r, postfix.ALL if fixes is None else fixes)
+    if boxes:
+        return r
+    return {k: [i["text"] for i in v] if k != "tables" else v for k, v in r.items()}
+
+
+def _read_page(img, models, language, max_img_size):
     import numpy as np
     from edocr2 import tools
     recognizer_gdt, recognizer_dim, alphabet_dim, detector = models
@@ -202,11 +214,6 @@ def read_page(img, models, language="eng", boxes=False, max_img_size=1048):
         work = work[frame.y: frame.y + frame.h, frame.x: frame.x + frame.w]
     dimensions, other_info, _, _ = tools.ocr_pipelines.ocr_dimensions(
         work, detector, recognizer_dim, alphabet_dim, frame, dim_boxes, cluster_thres=20, max_img_size=max_img_size, language=language, backg_save=False)
-    if not boxes:
-        return {"gdt": [g[0] for g in gdt_results],
-                "dimensions": [d[0] for d in dimensions],
-                "other": [o[0] for o in other_info],
-                "tables": [" ".join(t["text"] for t in table) for table in table_results]}
     # dimensions are found inside the drawing frame; put their boxes back on the page
     dx, dy = (frame.x, frame.y) if frame else (0, 0)
     on_page = lambda b: (np.asarray(b, dtype=float) + [dx, dy]).tolist()
@@ -286,10 +293,10 @@ def run(args):
             else:
                 if models is None:
                     t0 = time.time()
-                    models = load_models("cpu" if args.cpu else None, args.keras)
+                    models = load_models("cpu" if args.cpu else None, args.keras, args.models)
                     print(f"models loaded in {time.time() - t0:.0f} s", flush=True)
                     t = time.time()
-                r = read_page(img, models)
+                r = read_page(img, models, fixes=() if args.no_fixes else None)
                 r["source"] = "ocr"
             r["seconds"] = round(time.time() - t, 1)
             with open(out_json, "w", encoding="utf-8") as f:
@@ -347,5 +354,7 @@ def main(argv=None):
     r.add_argument("--keras", action="store_true", help="use the original TensorFlow detector and recognizers (slow)")
     r.add_argument("--skip-done", action="store_true", help="skip pages already in --out")
     r.add_argument("--ocr", action="store_true", help="recognise every page, even PDF pages that carry their own text")
+    r.add_argument("--no-fixes", action="store_true", help="leave out the corrections in edocr2/postfix.py")
+    r.add_argument("--models", help="folder with recognizer_gdts.pt and recognizer_dimensions_2.pt to use instead of edocr2/models")
     args = p.parse_args(argv)
     return {"doctor": doctor, "setup": setup, "run": run}[args.command](args)

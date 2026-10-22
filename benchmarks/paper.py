@@ -60,15 +60,18 @@ def score(ground_truth, predictions, iou_thres=0.2):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--keras", action="store_true", help="the original TensorFlow models")
+    ap.add_argument("--models", help="folder of PyTorch recognizers to use instead of edocr2/models")
+    ap.add_argument("--fixes", default="all", help="corrections from edocr2/postfix.py: all, none, or a comma list")
     ap.add_argument("--json", help="write the results here")
     args = ap.parse_args()
     cli.use_tesseract()
-    models = cli.load_models(None, args.keras)
+    models = cli.load_models(None, args.keras, args.models)
+    fixes = None if args.fixes == "all" else () if args.fixes == "none" else tuple(args.fixes.split(","))
     per, times = {}, []
     for img_path in sorted(glob.glob(os.path.join(SAMPLES, "*.jpg")) + glob.glob(os.path.join(SAMPLES, "*.png"))):
         name = os.path.splitext(os.path.basename(img_path))[0]
         t = time.time()
-        r = cli.read_page(cv2.imread(img_path), models, boxes=True, max_img_size=1240)
+        r = cli.read_page(cv2.imread(img_path), models, boxes=True, max_img_size=1240, fixes=fixes)
         times.append(time.time() - t)
         preds = [(d["text"], np.array(d["box"])) for d in r["dimensions"]] + [("other_info", np.array(o["box"])) for o in r["other"]]
         per[name] = score(labels(img_path[:-4] + ".json"), preds)
