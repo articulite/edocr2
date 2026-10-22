@@ -351,7 +351,7 @@ def save_recog_samples(alphabet, fonts, samples, recognizer, save_path = './reco
         
         # Save the label in a text file
         label_filename = os.path.join(save_path, f'{i + 1}.txt')
-        with open(label_filename, 'w') as label_file:
+        with open(label_filename, 'w', encoding='utf-8') as label_file:
             label_file.write(text)
 
 def save_detect_samples(alphabet, fonts, samples, save_path = './detect_samples'):
@@ -391,7 +391,7 @@ def save_detect_samples(alphabet, fonts, samples, save_path = './detect_samples'
                 #cv2.polylines(image, [pts], isClosed=True, color=(255, 0, 0), thickness=2)
                 label += '### \n'
 
-        with open(label_filename, 'w') as txt_file:
+        with open(label_filename, 'w', encoding='utf-8') as txt_file:
             txt_file.write(label)
 
         #cv2.imshow('Image with Oriented Bounding Box', image)
@@ -454,7 +454,7 @@ def train_synth_recognizer(alphabet, fonts, pretrained = None, bias_char = '', s
 
     recognition_train_generator = recognizer.get_batch_generator(recog_img_gen_train, batch_size)
     recognition_val_generator = recognizer.get_batch_generator(recog_img_gen_val, batch_size)
-    with open(f'{basepath}.txt', 'w') as file:
+    with open(f'{basepath}.txt', 'w', encoding='utf-8') as file:
         file.write(alphabet)
     recognizer.training_model.fit(
         recognition_train_generator,
@@ -605,7 +605,7 @@ def test_recog(test_path, recognizer):
     
     for i in range(1, int(samples) + 1):
         img = cv2.imread(os.path.join(test_path, f"{i}.png"))
-        with open(os.path.join(test_path, f"{i}.txt"), 'r') as txt_file:
+        with open(os.path.join(test_path, f"{i}.txt"), 'r', encoding='utf-8') as txt_file:
             label = txt_file.read().strip()
         pred = recognizer.recognize(image = img)
         print(f'ground truth: {label} | prediction: {pred}')
@@ -637,7 +637,7 @@ def test_detect(test_path, detector, show_img = False):
         img = cv2.imread(os.path.join(test_path, f"img_{i}.png"))
         gt = []
 
-        with open(os.path.join(test_path, f"gt_img_{i}.txt"), 'r') as txt_file:
+        with open(os.path.join(test_path, f"gt_img_{i}.txt"), 'r', encoding='utf-8') as txt_file:
             for line in txt_file:
                 # Split the line by commas and strip any whitespace
                 parts = line.strip().split(',')

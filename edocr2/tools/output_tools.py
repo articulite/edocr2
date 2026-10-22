@@ -66,7 +66,7 @@ def process_raw_output(output_path, table_results = None, gdt_results = None, di
     if table_results and save:
         csv_file = os.path.join(output_path, 'table_results.csv')
         new_table_results =[]
-        with open(csv_file, mode='w', newline='') as file:
+        with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
             # Write the header    
             for t in range(len(table_results)):
@@ -83,7 +83,7 @@ def process_raw_output(output_path, table_results = None, gdt_results = None, di
     #Write GD&T Results
     if gdt_results and save:
         csv_file = os.path.join(output_path, 'gdt_results.csv')
-        with open(csv_file, mode='w', newline='') as file:
+        with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
             # Write the header
             writer.writerow(["Text", "X Coordinate", "Y Coordinate"])
@@ -102,7 +102,7 @@ def process_raw_output(output_path, table_results = None, gdt_results = None, di
         dimension_results = new_dim_results
         if save:
             csv_file = os.path.join(output_path, 'dimension_results.csv')
-            with open(csv_file, mode='w', newline='') as file:
+            with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
                 writer = csv.writer(file)
                 # Write the header
                 writer.writerow(["Text", "X Coordinate", "Y Coordinate"])
@@ -119,7 +119,7 @@ def process_raw_output(output_path, table_results = None, gdt_results = None, di
         other_info = new_info_results
         if save:
             csv_file = os.path.join(output_path, 'other_info.csv')
-            with open(csv_file, mode='w', newline='') as file:
+            with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
                 writer = csv.writer(file)
                 # Write the header
                 writer.writerow(["Text", "X Coordinate", "Y Coordinate"])

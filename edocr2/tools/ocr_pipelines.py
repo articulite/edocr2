@@ -3,7 +3,7 @@ import numpy as np
 
 def read_alphabet(keras_path):
     txt_path = os.path.splitext(keras_path)[0] + '.txt'
-    with open(txt_path, 'r') as file:
+    with open(txt_path, 'r', encoding='utf-8') as file:
         content = file.readline().strip()
     return content
 
@@ -247,7 +247,7 @@ class Pipeline:
         from shapely.ops import unary_union
         mask_img = img.copy()
         old_dim, new_dimensions, boxes = [], [], []
-        folder_path = os.path.join('edocr2/tools/symbol_match', folder_code)
+        folder_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'symbol_match', folder_code)
         for dim in dimensions:
             #filter out dim wit diameter symbol:
             if char in dim[0]:
