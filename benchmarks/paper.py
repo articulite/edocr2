@@ -2,7 +2,7 @@
 test_all.py scores them (detection precision and recall at IoU >= 0.2, character recall and
 CER on matched dimensions, micro and macro averaged), run through the current pipeline.
 
-    python benchmarks/paper.py [--keras-detector] [--json OUT]
+    python benchmarks/paper.py [--keras] [--json OUT]
 
 test_all.py itself no longer runs: it calls ocr_dimensions without the frame argument that
 was added later. The metric code here is the same; only the call is current.
@@ -59,11 +59,11 @@ def score(ground_truth, predictions, iou_thres=0.2):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--keras-detector", action="store_true")
+    ap.add_argument("--keras", action="store_true", help="the original TensorFlow models")
     ap.add_argument("--json", help="write the results here")
     args = ap.parse_args()
     cli.use_tesseract()
-    models = cli.load_models(None, args.keras_detector)
+    models = cli.load_models(None, args.keras)
     per, times = {}, []
     for img_path in sorted(glob.glob(os.path.join(SAMPLES, "*.jpg")) + glob.glob(os.path.join(SAMPLES, "*.png"))):
         name = os.path.splitext(os.path.basename(img_path))[0]

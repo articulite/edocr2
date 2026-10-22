@@ -1,7 +1,7 @@
 """Score the pipeline on drawgen sheets, whose record.json gives every callout's text and its
 place on the sheet. Each callout is judged only by what was read at that place.
 
-    python benchmarks/drawgen.py TUPLES_DIR --out DIR [--variants clean,scan] [--keras-detector]
+    python benchmarks/drawgen.py TUPLES_DIR --out DIR [--variants clean,scan] [--keras]
 
 TUPLES_DIR holds drawgen tuples (each a folder with drawing.pdf and record.json). Each drawing is
 rendered at 300 dpi, clean and "scanned" (slightly rotated, blurred, noisy, thresholded to one
@@ -184,11 +184,11 @@ def main():
     ap.add_argument("tuples")
     ap.add_argument("--out", required=True)
     ap.add_argument("--variants", default="clean,scan")
-    ap.add_argument("--keras-detector", action="store_true")
+    ap.add_argument("--keras", action="store_true", help="the original TensorFlow models")
     args = ap.parse_args()
     from edocr2 import cli
     cli.use_tesseract()
-    models = cli.load_models(None, args.keras_detector)
+    models = cli.load_models(None, args.keras)
     summary = {}
     for variant in args.variants.split(","):
         out = Path(args.out) / variant

@@ -51,8 +51,11 @@ def use_tesseract():
     return cmd
 
 
+TORCH_MODELS = ["recognizer_gdts.pt", "recognizer_dimensions_2.pt"]
+
+
 def missing_models():
-    return [f for f in MODEL_FILES if not os.path.isfile(os.path.join(MODELS, f))]
+    return [f for f in MODEL_FILES + TORCH_MODELS if not os.path.isfile(os.path.join(MODELS, f))]
 
 
 def missing_languages():
@@ -76,12 +79,13 @@ def doctor(args):
         line("pytorch", True, f"{torch.__version__}, " + (f"GPU: {gpu}" if gpu else "no GPU, the detector will run on the CPU"))
     except ImportError:
         line("pytorch", False, "not installed; run setup")
+    # TensorFlow is only for --keras and for converting the released weights once
     try:
-        os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+        os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
         import tensorflow as tf
-        line("tensorflow", True, f"{tf.__version__} (recognizers, on the CPU)")
+        line("tensorflow", True, f"{tf.__version__} (only for --keras and converting weights)")
     except ImportError:
-        line("tensorflow", False, "not installed; run setup")
+        line("tensorflow", True, "not installed: fine unless you use --keras")
     cmd = find_tesseract()
     if cmd:
         version = subprocess.run([cmd, "--version"], capture_output=True, text=True).stdout.split("\n")[0]
@@ -108,7 +112,14 @@ def download(url, path):
 def setup(args):
     os.makedirs(MODELS, exist_ok=True)
     for f in missing_models():
-        download(RELEASE + f, os.path.join(MODELS, f))
+        if f in MODEL_FILES:
+            download(RELEASE + f, os.path.join(MODELS, f))
+    # the PyTorch recognizers are the released Keras weights, converted once (with TensorFlow)
+    for f in TORCH_MODELS:
+        if not os.path.isfile(os.path.join(MODELS, f)):
+            from edocr2.torch_recognizer import convert
+            print(f"  converting {f}")
+            convert(os.path.join(MODELS, f[:-3] + ".keras"))
     os.makedirs(TESSDATA, exist_ok=True)
     system = system_tessdata(find_tesseract())
     for lang in missing_languages():
@@ -119,8 +130,8 @@ def setup(args):
         else:
             download(TESSDATA_URL.format(lang), os.path.join(TESSDATA, f"{lang}.traineddata"))
     # the detector's weights are fetched and checked on first use; do it now so `run` works offline
-    from edocr2.keras_ocr import detection, tools
-    cfg = detection.PRETRAINED_WEIGHTS[("clovaai_general", True)]
+    from edocr2.keras_ocr import craft, tools
+    cfg = craft.PRETRAINED_WEIGHTS[("clovaai_general", True)]
     tools.download_and_verify(url=cfg["url"], filename=cfg["filename"], sha256=cfg["sha256"])
     print("setup done")
     return doctor(args)
@@ -152,13 +163,21 @@ def pages(inputs, dpi, use_text=True):
             yield stem, cv2.imread(path), None
 
 
-def load_models(device, keras_detector):
+def load_models(device, keras=False):
+    """(GD&T recognizer, dimension recognizer, its alphabet, detector). PyTorch unless keras is
+    set, which gives the original TensorFlow models."""
+    if not keras:
+        from edocr2.keras_ocr.craft import TorchDetector
+        from edocr2.torch_recognizer import TorchRecognizer
+        recognizer_gdt = TorchRecognizer.load(os.path.join(MODELS, "recognizer_gdts.pt"), device)
+        recognizer_dim = TorchRecognizer.load(os.path.join(MODELS, "recognizer_dimensions_2.pt"), device)
+        return recognizer_gdt, recognizer_dim, recognizer_dim.alphabet, TorchDetector(device=device)
     os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
     import logging
     logging.getLogger("tensorflow").setLevel(logging.ERROR)   # before the import, which already warns
     from edocr2 import tools
     from edocr2.keras_ocr.recognition import Recognizer
-    from edocr2.keras_ocr.detection import Detector, TorchDetector
+    from edocr2.keras_ocr.detection import Detector
     gdt_model, dim_model = os.path.join(MODELS, "recognizer_gdts.keras"), os.path.join(MODELS, "recognizer_dimensions_2.keras")
     # weights=None: every weight comes from the .keras file, so keras-ocr's backbone is not fetched
     recognizer_gdt = Recognizer(alphabet=tools.ocr_pipelines.read_alphabet(gdt_model), weights=None)
@@ -166,8 +185,7 @@ def load_models(device, keras_detector):
     alphabet_dim = tools.ocr_pipelines.read_alphabet(dim_model)
     recognizer_dim = Recognizer(alphabet=alphabet_dim, weights=None)
     recognizer_dim.model.load_weights(dim_model)
-    detector = Detector() if keras_detector else TorchDetector(device=device)
-    return recognizer_gdt, recognizer_dim, alphabet_dim, detector
+    return recognizer_gdt, recognizer_dim, alphabet_dim, Detector()
 
 
 def read_page(img, models, language="eng", boxes=False, max_img_size=1048):
@@ -268,7 +286,7 @@ def run(args):
             else:
                 if models is None:
                     t0 = time.time()
-                    models = load_models("cpu" if args.cpu else None, args.keras_detector)
+                    models = load_models("cpu" if args.cpu else None, args.keras)
                     print(f"models loaded in {time.time() - t0:.0f} s", flush=True)
                     t = time.time()
                 r = read_page(img, models)
@@ -326,7 +344,7 @@ def main(argv=None):
     r.add_argument("--out", required=True, help="folder for the results")
     r.add_argument("--dpi", type=int, default=300, help="resolution PDFs are rendered at (default 300)")
     r.add_argument("--cpu", action="store_true", help="run the detector on the CPU even when there is a GPU")
-    r.add_argument("--keras-detector", action="store_true", help="use the original TensorFlow detector (slow)")
+    r.add_argument("--keras", action="store_true", help="use the original TensorFlow detector and recognizers (slow)")
     r.add_argument("--skip-done", action="store_true", help="skip pages already in --out")
     r.add_argument("--ocr", action="store_true", help="recognise every page, even PDF pages that carry their own text")
     args = p.parse_args(argv)
