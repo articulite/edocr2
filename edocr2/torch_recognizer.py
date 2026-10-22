@@ -72,6 +72,10 @@ class CRNN(nn.Module):
 
     def forward(self, images):
         """images: (B, height, width) floats in [0, 1]. Returns (B, steps - 2, classes) softmax."""
+        return F.softmax(self.logits(images), dim=2)
+
+    def logits(self, images):
+        """The scores before the softmax, for training."""
         x = images.transpose(1, 2).flip(2).unsqueeze(1)          # (B, 1, width, height): Permute, then flip
         for k, conv in enumerate(self.convs):
             x = F.relu(conv(x))
@@ -86,7 +90,7 @@ class CRNN(nn.Module):
         x = F.relu(self.fc9(x.reshape(x.shape[0], x.shape[1], -1)))
         r1 = self.lstm10(x)[0] + self.lstm10b(x.flip(1))[0]
         x = torch.cat([self.lstm11(r1)[0], self.lstm11b(r1.flip(1))[0]], dim=2)
-        return F.softmax(self.fc12(x), dim=2)[:, DISCARD:]
+        return self.fc12(x)[:, DISCARD:]
 
 
 def keras_to_state(recognizer):
@@ -124,9 +128,8 @@ class TorchRecognizer:
     """Recognizer.recognize, in PyTorch, plus a batched version."""
 
     def __init__(self, alphabet, state=None, device=None):
-        # full float32 on the GPU, so results match the CPU's (TF32 moved outputs by ~3e-3)
-        torch.backends.cuda.matmul.allow_tf32 = False
-        torch.backends.cudnn.allow_tf32 = False
+        # TF32 stays as PyTorch sets it: on the GPU it moves outputs by ~3e-3 (no text changed on
+        # 132 crops), and turning it off is global and slowed the detector 35-fold
         self.alphabet = alphabet
         self.blank_label_idx = len(alphabet)
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
