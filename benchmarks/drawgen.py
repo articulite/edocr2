@@ -100,28 +100,40 @@ def judge(c, here, frames_here):
             out["datums"] = [x for x in cells[1:] if re.fullmatch(r"[A-Z](-[A-Z])?", x)] == c["datums"]
         out["fully right"] = all(out.values())
         return out
-    if k in ("thread", "hole"):
-        m = re.search(r"M(\d+(?:\.\d+)?)(?:\s*[X×x]\s*(\d+(?:\.\d+)?))?", c.get("text") or "")
-        if m:
+    truth = (c.get("text") or "").replace(",", ".")
+    # a thread, or a size written as a hole note (count, ending, counterbore)
+    if k == "thread" or (k == "size" and re.search(r"THRU|↧|^\d+X", truth)):
+        m = re.search(r"M(\d+(?:\.\d+)?)(?:\s*[X×x]\s*(\d+(?:\.\d+)?))?", truth)
+        if k == "thread" and m:
             out["size"] = norm("M" + m.group(1)) in norm(text)
             if m.group(2):
                 out["pitch"] = norm(f"M{m.group(1)}X{m.group(2)}") in norm(text)
-        cnt = re.match(r"(\d+)\s*[X×]", c.get("text") or "")
+        cnt = re.match(r"(\d+)\s*[X×]", truth)
         if cnt:
             out["count"] = norm(cnt.group(1) + "X") in norm(text)
         for word in ("THRU", "MIN", "MAX"):
-            if word in (c.get("text") or ""):
+            if word in truth:
                 out[word] = word in norm(text)
+        depth = re.search(r"↧\s*([\d.]+)", truth)
+        if depth:
+            out["depth"] = has_number(text, float(depth.group(1)))
+        cb = re.search(r"⌴\s*Ø([\d.]+)", truth)
+        if cb:
+            out["counterbore Ø"] = has_number(text, float(cb.group(1)))
     if k in ("size", "location", "hole") and c.get("size"):
         s = c["size"]
         out["nominal"] = has_number(text, s["nominal"])
         if c.get("fit"):
             out["fit class"] = norm(c["fit"]["class"]) in norm(text)
-        dev = [v for v in (s.get("upper"), s.get("lower")) if v]
-        if dev:
-            out["deviations"] = all(has_number(text, abs(v)) for v in dev)
-        if s.get("limits"):
-            out["limits"] = all(has_number(text, v) for v in s["limits"])
+        hi, lo = s["nominal"] + (s.get("upper") or 0), s["nominal"] - (s.get("lower") or 0)
+        if hi != lo and has_number(truth, hi) and has_number(truth, lo):
+            # written as limits, larger over smaller
+            out["limits"] = has_number(text, hi) and has_number(text, lo)
+            out.pop("nominal", None)
+        else:
+            dev = [v for v in (s.get("upper"), s.get("lower")) if v]
+            if dev:
+                out["deviations"] = all(has_number(text, abs(v)) for v in dev)
     if k == "finish":
         out["Ra"] = norm(c["text"].split()[-1]) in norm(text)
     if k == "note":
@@ -148,7 +160,12 @@ def score_sheet(record, result, px_per_mm, warp=None):
             box = bbox(cv2.transform(pts[None], warp)[0])
         checks = judge(c, place(box, texts), place(box, frames))
         if checks:
-            rows.append({"id": c["id"], "kind": "frame" if c["kind"] == "control" else c["kind"], "checks": checks})
+            kind = {"control": "frame", "thread": "thread note"}.get(c["kind"], c["kind"])
+            if c["kind"] == "size" and re.search(r"THRU|↧", c.get("text") or ""):
+                kind = "size hole note"
+            if c["kind"] == "location" and c.get("reference"):
+                kind = "reference distance"
+            rows.append({"id": c["id"], "kind": kind, "checks": checks})
     return rows
 
 
@@ -177,7 +194,9 @@ def main():
         out = Path(args.out) / variant
         out.mkdir(parents=True, exist_ok=True)
         rows, secs, failed = [], [], 0
-        for i, t in enumerate(sorted(p.parent for p in Path(args.tuples).glob("*/record.json"))):
+        root = Path(args.tuples)
+        for i, t in enumerate(sorted(p.parent for p in root.rglob("record.json"))):
+            name = "_".join(t.relative_to(root).parts)   # ctc_01/seed101 -> ctc_01_seed101
             record = json.loads((t / "record.json").read_text(encoding="utf-8"))
             gray = render(t / "drawing.pdf")
             warp = None
@@ -188,13 +207,13 @@ def main():
                 result = cli.read_page(cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR), models, boxes=True)
             except Exception as e:
                 failed += 1
-                (out / f"{t.name}.error.txt").write_text(repr(e), encoding="utf-8")
+                (out / f"{name}.error.txt").write_text(repr(e), encoding="utf-8")
                 continue
             secs.append(time.time() - started)
             sheet_rows = score_sheet(record, result, gray.shape[1] / record["sheet"]["w"], warp)
             rows += sheet_rows
-            (out / f"{t.name}.json").write_text(json.dumps({"result": result, "scores": sheet_rows}, ensure_ascii=False, indent=1), encoding="utf-8")
-            print(f"{variant} {t.name}: {secs[-1]:.1f} s", flush=True)
+            (out / f"{name}.json").write_text(json.dumps({"result": result, "scores": sheet_rows}, ensure_ascii=False, indent=1), encoding="utf-8")
+            print(f"{variant} {name}: {secs[-1]:.1f} s", flush=True)
         summary[variant] = {"sheets": len(secs), "failed": failed,
                             "seconds_per_sheet": round(float(np.median(secs)), 1) if secs else None,
                             "scores": summarise(rows)}
