@@ -484,7 +484,7 @@ class Recognizer:
         return "".join(
             [
                 self.alphabet[idx]
-                for idx in self.prediction_model.predict(image[np.newaxis])[0]
+                for idx in self.prediction_model.predict(image[np.newaxis], verbose=0)[0]
                 if idx not in [self.blank_label_idx, -1]
             ]
         )
