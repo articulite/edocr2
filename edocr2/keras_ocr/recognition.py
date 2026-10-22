@@ -469,6 +469,8 @@ class Recognizer:
         Args:
             image: A pre-cropped image containing characters
         """
+        if isinstance(image, np.ndarray) and (image.size == 0 or min(image.shape[:2]) < 2):
+            return ""  # an empty crop holds no text
         image = tools.read_and_fit(
             filepath_or_array=image,
             width=self.prediction_model.input_shape[2],

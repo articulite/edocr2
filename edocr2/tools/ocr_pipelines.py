@@ -647,6 +647,11 @@ def group_polygons_by_proximity(polygons, eps=20):
 
 def check_tolerances(img):
     img_arr = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) #Convert img to grayscale
+    # The loops below need a dark pixel to start on and another row below it to end on; a blank
+    # crop, or one whose ink is a single row, has nothing to split: keep it whole
+    dark = img_arr[:, :-1] < 200
+    if not dark[:-1].any() or not dark[np.argmax(dark[:-1].any(axis=1)) + 1:].any():
+        return [img]
     flag=False
     tole = False
     ## Find top and bottom line
@@ -845,6 +850,8 @@ def ocr_dimensions(img, detector, recognizer, alphabet_dim, frame, dim_boxes = [
         x, y = d.x -frame.x, d.y-frame.y
         if x + d.w < frame.x + frame.w and y + d.h < frame.y + frame.h:
             roi = img[y+2:y + d.h-4, x+2:x + d.w-4]
+            if roi.size == 0 or min(roi.shape[:2]) < 2: #The box lies partly outside the frame
+                continue
             if d.h > d.w:
                 roi=cv2.rotate(roi,cv2.ROTATE_90_CLOCKWISE)
             p = recognizer.recognize(image = roi)

@@ -437,7 +437,8 @@ def fit(
         resize_height = height
         resize_width = scale * image.shape[1]
     if fitted is None:
-        resize_width, resize_height = map(int, [resize_width, resize_height])
+        # a sliver of a crop can round to zero pixels, which cv2.resize rejects
+        resize_width, resize_height = (max(1, int(v)) for v in (resize_width, resize_height))
         if mode == "letterbox":
             fitted = np.zeros((height, width, 3), dtype="uint8") + cval
             image = cv2.resize(image, dsize=(resize_width, resize_height))

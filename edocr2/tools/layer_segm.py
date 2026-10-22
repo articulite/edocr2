@@ -218,8 +218,11 @@ def find_frame(img, frame_thres):
             return max_p, min_p
     
     # Return the best (innermost) frame found
-    bottom, top = find_best_peaks(h_peaks, 0)
-    right, left = find_best_peaks(v_peaks, 1)
+    rows, cols = find_best_peaks(h_peaks, 0), find_best_peaks(v_peaks, 1)
+    if rows is None or cols is None:
+        return None  # No pair of lines far enough apart
+    bottom, top = rows
+    right, left = cols
     best_frame = Rect('frame', left, top, right - left, bottom - top)
    
     return best_frame
