@@ -14,3 +14,11 @@ python-dotenv
 accelerate
 tf-keras
 sentence-transformers
+tensorflow
+numpy < 2
+pytesseract
+pypdfium2
+shapely
+scipy
+matplotlib
+fonttools
