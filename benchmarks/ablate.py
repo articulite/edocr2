@@ -20,7 +20,7 @@ from benchmarks import drawgen as dg, paper            # noqa: E402
 from edocr2 import cli, postfix                         # noqa: E402
 from edocr2.tools import train_tools                    # noqa: E402
 
-COMBOS = [(), ("frame_decimal",), ("diameter_z",), ("six_b",), ("join_lines",), postfix.ALL]
+COMBOS = [(), ("frame_decimal",), ("diameter_z",), ("six_b",), ("join_lines",), postfix.DEFAULT, postfix.ALL]
 KEYS = ["frame: value", "frame: fully right", "thread note: size", "thread note: fully right",
         "size: nominal", "size hole note: fully right", "finish: Ra"]
 
@@ -52,8 +52,7 @@ def main():
     table = {}
     for combo in COMBOS:
         name = "+".join(combo) if combo else "none"
-        if combo == postfix.ALL:
-            name = "all"
+        name = {postfix.ALL: "all", postfix.DEFAULT: "default"}.get(combo, name)
         row = {}
         for variant in ("clean", "scan"):
             rows = []

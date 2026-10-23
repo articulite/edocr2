@@ -186,12 +186,12 @@ def main():
     ap.add_argument("--variants", default="clean,scan")
     ap.add_argument("--keras", action="store_true", help="the original TensorFlow models")
     ap.add_argument("--models", help="folder of PyTorch recognizers to use instead of edocr2/models")
-    ap.add_argument("--fixes", default="all", help="corrections from edocr2/postfix.py: all, none, or a comma list")
+    ap.add_argument("--fixes", default="default", help="corrections from edocr2/postfix.py: default, all, none, or a comma list")
     args = ap.parse_args()
     from edocr2 import cli
     cli.use_tesseract()
     models = cli.load_models(None, args.keras, args.models)
-    fixes = None if args.fixes == "all" else () if args.fixes == "none" else tuple(args.fixes.split(","))
+    fixes = None if args.fixes == "default" else ("frame_decimal", "diameter_z", "six_b", "join_lines") if args.fixes == "all" else () if args.fixes == "none" else tuple(args.fixes.split(","))
     summary = {}
     for variant in args.variants.split(","):
         out = Path(args.out) / variant

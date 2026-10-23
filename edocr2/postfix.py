@@ -1,6 +1,6 @@
 """Corrections applied to what the pipeline read, each for a mistake measured on drawgen sheets
-(benchmarks/drawgen.py). Each can be switched off; benchmarks/ablate.py measures them one at a
-time.
+(benchmarks/drawgen.py). DEFAULT is what read_page applies; benchmarks/ablate.py measures each
+one at a time, and the numbers are beside DEFAULT.
 
 frame_decimal  A GD&T tolerance read without its separator (001, 02, ⌀0005) gets it back:
                a frame value starts with 0 and is under 1, so 001 can only be 0.01. The
@@ -19,6 +19,12 @@ import re
 import numpy as np
 
 ALL = ("frame_decimal", "diameter_z", "six_b", "join_lines")
+# Measured with benchmarks/ablate.py on the released recognizers: frame_decimal took GD&T values
+# read right on held-out drawgen sheets from 52% to 100% (scanned 56% to 86%), six_b thread sizes
+# from 72% to 97% and sizes from 60% to 90%, both with no change on the paper's benchmark.
+# join_lines changed nothing on drawgen and on the paper's drawings merged dimensions labelled
+# apart (recall 93.75% to 87.5%), so it is not applied unless asked for.
+DEFAULT = ("frame_decimal", "diameter_z", "six_b")
 
 
 def frame_decimal(text):
@@ -106,7 +112,7 @@ def join_lines(items):
     return out
 
 
-def apply(result, fixes=ALL):
+def apply(result, fixes=DEFAULT):
     """Correct a read_page(..., boxes=True) result in place and return it."""
     if "frame_decimal" in fixes:
         for g in result["gdt"]:

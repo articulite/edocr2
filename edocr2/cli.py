@@ -192,11 +192,11 @@ def load_models(device, keras=False, folder=None):
 
 def read_page(img, models, language="eng", boxes=False, max_img_size=1048, fixes=None):
     """The steps of test_drawing.py, without the language-model ones, then the corrections in
-    edocr2/postfix.py (all of them unless `fixes` names which; () for none). With boxes=True
+    edocr2/postfix.py (its DEFAULT unless `fixes` names which; () for none). With boxes=True
     each item is {"text", "box"}, the box as four corner points in page pixels."""
     from edocr2 import postfix
     r = _read_page(img, models, language, max_img_size)
-    postfix.apply(r, postfix.ALL if fixes is None else fixes)
+    postfix.apply(r, postfix.DEFAULT if fixes is None else fixes)
     if boxes:
         return r
     return {k: [i["text"] for i in v] if k != "tables" else v for k, v in r.items()}
@@ -296,7 +296,9 @@ def run(args):
                     models = load_models("cpu" if args.cpu else None, args.keras, args.models)
                     print(f"models loaded in {time.time() - t0:.0f} s", flush=True)
                     t = time.time()
-                r = read_page(img, models, fixes=() if args.no_fixes else None)
+                from edocr2 import postfix
+                fixes = () if args.no_fixes else postfix.DEFAULT + (("join_lines",) if args.join_lines else ())
+                r = read_page(img, models, fixes=fixes)
                 r["source"] = "ocr"
             r["seconds"] = round(time.time() - t, 1)
             with open(out_json, "w", encoding="utf-8") as f:
@@ -355,6 +357,7 @@ def main(argv=None):
     r.add_argument("--skip-done", action="store_true", help="skip pages already in --out")
     r.add_argument("--ocr", action="store_true", help="recognise every page, even PDF pages that carry their own text")
     r.add_argument("--no-fixes", action="store_true", help="leave out the corrections in edocr2/postfix.py")
+    r.add_argument("--join-lines", action="store_true", help="also join the words of one callout read apart (4x M12 6G)")
     r.add_argument("--models", help="folder with recognizer_gdts.pt and recognizer_dimensions_2.pt to use instead of edocr2/models")
     args = p.parse_args(argv)
     return {"doctor": doctor, "setup": setup, "run": run}[args.command](args)
