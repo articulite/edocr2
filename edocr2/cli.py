@@ -11,6 +11,8 @@ downloads, and only from the public URLs listed below.
 
 import argparse, csv, glob, json, os, re, shutil, statistics, subprocess, sys, time, traceback, urllib.request
 
+from edocr2 import textlayer
+
 PACKAGE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(PACKAGE)
 MODELS = os.path.join(PACKAGE, "models")
@@ -22,6 +24,8 @@ MODEL_FILES = ["recognizer_gdts.keras", "recognizer_gdts.txt", "recognizer_dimen
 TESSDATA_URL = "https://github.com/tesseract-ocr/tessdata/raw/main/{}.traineddata"
 LANGUAGES = ["eng", "osd", "nor"]
 IMAGE_TYPES = (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp")
+# the released dimension recognizer's alphabet: what a box may contain to be routed as a dimension
+ROUTING_BASE = "0123456789AaBCDRGHhMmnxZt(),.+-±:/°\"⌀="
 
 
 # ───────────────────────── finding things ─────────────────────────
@@ -49,8 +53,19 @@ def use_tesseract():
     return cmd
 
 
+TORCH_MODELS = ["recognizer_gdts.pt", "recognizer_dimensions_2.pt"]
+# The recognizers fine-tuned on drawgen sheets (training/), used when present; see README.
+FINETUNED = os.path.join(MODELS, "finetuned")
+FINETUNED_URL = "https://github.com/articulite/edocr2/releases/download/finetuned-v2/"
+
+
+def model_folder():
+    """The fine-tuned recognizers if they are here, else the released ones."""
+    return FINETUNED if all(os.path.isfile(os.path.join(FINETUNED, f)) for f in TORCH_MODELS) else MODELS
+
+
 def missing_models():
-    return [f for f in MODEL_FILES if not os.path.isfile(os.path.join(MODELS, f))]
+    return [f for f in MODEL_FILES + TORCH_MODELS if not os.path.isfile(os.path.join(MODELS, f))]
 
 
 def missing_languages():
@@ -74,12 +89,13 @@ def doctor(args):
         line("pytorch", True, f"{torch.__version__}, " + (f"GPU: {gpu}" if gpu else "no GPU, the detector will run on the CPU"))
     except ImportError:
         line("pytorch", False, "not installed; run setup")
+    # TensorFlow is only for --keras and for converting the released weights once
     try:
-        os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+        os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
         import tensorflow as tf
-        line("tensorflow", True, f"{tf.__version__} (recognizers, on the CPU)")
+        line("tensorflow", True, f"{tf.__version__} (only for --keras and converting weights)")
     except ImportError:
-        line("tensorflow", False, "not installed; run setup")
+        line("tensorflow", True, "not installed: fine unless you use --keras")
     cmd = find_tesseract()
     if cmd:
         version = subprocess.run([cmd, "--version"], capture_output=True, text=True).stdout.split("\n")[0]
@@ -90,6 +106,7 @@ def doctor(args):
     line("languages", not langs, f"{', '.join(LANGUAGES)} in {TESSDATA}" if not langs else f"missing {', '.join(langs)}; run setup")
     models = missing_models()
     line("models", not models, MODELS if not models else f"missing {', '.join(models)}; run setup")
+    line("recognizers", True, "fine-tuned (" + FINETUNED + ")" if model_folder() == FINETUNED else "released (no fine-tuned ones found)")
     print("ready" if ok else "not ready: fix the lines marked !!")
     return 0 if ok else 1
 
@@ -106,7 +123,14 @@ def download(url, path):
 def setup(args):
     os.makedirs(MODELS, exist_ok=True)
     for f in missing_models():
-        download(RELEASE + f, os.path.join(MODELS, f))
+        if f in MODEL_FILES:
+            download(RELEASE + f, os.path.join(MODELS, f))
+    # the PyTorch recognizers are the released Keras weights, converted once (with TensorFlow)
+    for f in TORCH_MODELS:
+        if not os.path.isfile(os.path.join(MODELS, f)):
+            from edocr2.torch_recognizer import convert
+            print(f"  converting {f}")
+            convert(os.path.join(MODELS, f[:-3] + ".keras"))
     os.makedirs(TESSDATA, exist_ok=True)
     system = system_tessdata(find_tesseract())
     for lang in missing_languages():
@@ -116,9 +140,17 @@ def setup(args):
             print(f"  copied {lang} from {system}")
         else:
             download(TESSDATA_URL.format(lang), os.path.join(TESSDATA, f"{lang}.traineddata"))
+    # the fine-tuned recognizers, where they have been published; the released ones otherwise
+    if model_folder() != FINETUNED:
+        os.makedirs(FINETUNED, exist_ok=True)
+        try:
+            for f in TORCH_MODELS:
+                download(FINETUNED_URL + f, os.path.join(FINETUNED, f))
+        except Exception as e:
+            print(f"  fine-tuned recognizers not available ({e}); using the released ones")
     # the detector's weights are fetched and checked on first use; do it now so `run` works offline
-    from edocr2.keras_ocr import detection, tools
-    cfg = detection.PRETRAINED_WEIGHTS[("clovaai_general", True)]
+    from edocr2.keras_ocr import craft, tools
+    cfg = craft.PRETRAINED_WEIGHTS[("clovaai_general", True)]
     tools.download_and_verify(url=cfg["url"], filename=cfg["filename"], sha256=cfg["sha256"])
     print("setup done")
     return doctor(args)
@@ -126,8 +158,9 @@ def setup(args):
 
 # ───────────────────────── run ─────────────────────────
 
-def pages(inputs, dpi):
-    """(name, BGR image) for every page of every PDF and every image file under the inputs."""
+def pages(inputs, dpi, use_text=True):
+    """(name, BGR image, text runs or None) for every page of every PDF and every image file
+    under the inputs. A PDF page with its own text gives its runs, unless use_text is False."""
     import cv2, numpy as np
     files = []
     for i in inputs:
@@ -143,18 +176,34 @@ def pages(inputs, dpi):
             doc = pypdfium2.PdfDocument(path)
             for n, page in enumerate(doc):
                 gray = np.array(page.render(scale=dpi / 72, grayscale=True).to_pil())
-                yield (stem if len(doc) == 1 else f"{stem}_p{n + 1}"), cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+                runs = textlayer.text_runs(page, dpi / 72) if use_text and textlayer.has_text(page) else None
+                yield (stem if len(doc) == 1 else f"{stem}_p{n + 1}"), cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR), runs
         else:
-            yield stem, cv2.imread(path)
+            yield stem, cv2.imread(path), None
 
 
-def load_models(device, keras_detector):
+def load_models(device, keras=False, folder=None):
+    """(GD&T recognizer, dimension recognizer, its alphabet, detector). PyTorch unless keras is
+    set, which gives the original TensorFlow models; `folder` holds other PyTorch recognizers
+    (recognizer_gdts.pt, recognizer_dimensions_2.pt)."""
+    if not keras:
+        from edocr2.keras_ocr.craft import TorchDetector
+        from edocr2.torch_recognizer import TorchRecognizer
+        folder = folder or model_folder()
+        recognizer_gdt = TorchRecognizer.load(os.path.join(folder, "recognizer_gdts.pt"), device)
+        recognizer_dim = TorchRecognizer.load(os.path.join(folder, "recognizer_dimensions_2.pt"), device)
+        # The third item is the alphabet the pipeline routes boxes by, not the recognizer's:
+        # a widened recognizer would otherwise pull title blocks and notes in as dimensions.
+        routing = recognizer_dim.alphabet
+        if len(routing) > len(ROUTING_BASE):
+            routing = ROUTING_BASE + "XTUIN↧⌴⌵□×"
+        return recognizer_gdt, recognizer_dim, routing, TorchDetector(device=device)
     os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
     import logging
     logging.getLogger("tensorflow").setLevel(logging.ERROR)   # before the import, which already warns
     from edocr2 import tools
     from edocr2.keras_ocr.recognition import Recognizer
-    from edocr2.keras_ocr.detection import Detector, TorchDetector
+    from edocr2.keras_ocr.detection import Detector
     gdt_model, dim_model = os.path.join(MODELS, "recognizer_gdts.keras"), os.path.join(MODELS, "recognizer_dimensions_2.keras")
     # weights=None: every weight comes from the .keras file, so keras-ocr's backbone is not fetched
     recognizer_gdt = Recognizer(alphabet=tools.ocr_pipelines.read_alphabet(gdt_model), weights=None)
@@ -162,26 +211,96 @@ def load_models(device, keras_detector):
     alphabet_dim = tools.ocr_pipelines.read_alphabet(dim_model)
     recognizer_dim = Recognizer(alphabet=alphabet_dim, weights=None)
     recognizer_dim.model.load_weights(dim_model)
-    detector = Detector() if keras_detector else TorchDetector(device=device)
-    return recognizer_gdt, recognizer_dim, alphabet_dim, detector
+    return recognizer_gdt, recognizer_dim, alphabet_dim, Detector()
 
 
-def read_page(img, models, language="eng"):
-    """The steps of test_drawing.py, without the language-model ones."""
+def read_page(img, models, language="eng", boxes=False, max_img_size=1048, fixes=None, border=None):
+    """The steps of test_drawing.py, without the language-model ones, then the corrections in
+    edocr2/postfix.py (its DEFAULT unless `fixes` names which; () for none). With boxes=True
+    each item is {"text", "box"}, the box as four corner points in page pixels.
+
+    border: "inner" reads inside the innermost frame found, as the original. "ring" does that,
+    then also reads the rest of the page around it, where callouts sit when that frame is a line
+    inside the border (the border itself is not always found); there, marks of one or two
+    characters (zone letters and numbers) are dropped. What "inner" reads is unchanged.
+    None: $EDOCR2_BORDER, else "inner"."""
+    from edocr2 import postfix
+    r = _read_page(img, models, language, max_img_size, border or os.environ.get("EDOCR2_BORDER", "inner"))
+    postfix.apply(r, postfix.DEFAULT if fixes is None else fixes)
+    if boxes:
+        return r
+    return {k: [i["text"] for i in v] if k != "tables" else v for k, v in r.items()}
+
+
+# the geometric characteristics, as the GD&T recognizer writes them
+GDT_SYMBOLS = "⏤⏥○⌭⌒⌓⏊∠⫽⌯⌖◎↗⌰"
+
+
+def looks_like_frame(text):
+    """Every line a frame: one characteristic symbol, then a cell with a number in it."""
+    for line in text.split("\n"):
+        cells = line.split("|")
+        if len(cells) < 2 or len(cells[0]) != 1 or cells[0] not in GDT_SYMBOLS or not any(c.isdigit() for c in cells[1]):
+            return False
+    return True
+
+
+def _read_page(img, models, language, max_img_size, border="inner"):
+    import numpy as np
     from edocr2 import tools
     recognizer_gdt, recognizer_dim, alphabet_dim, detector = models
-    _, frame, gdt_boxes, tables, dim_boxes = tools.layer_segm.segment_img(img, autoframe=True, frame_thres=0.7, GDT_thres=0.02, binary_thres=127)
+    # with "ring": the whole page, the innermost frame in frame.inner, and every GD&T frame
+    _, frame, gdt_boxes, tables, dim_boxes = tools.layer_segm.segment_img(
+        img, autoframe=True, frame_thres=0.7, GDT_thres=0.02, binary_thres=127, border="page" if border == "ring" else "inner")
+    outer = frame if border == "ring" and getattr(frame, "inner", None) else None
+    if outer:
+        frame = outer.inner
     work = img.copy()
     table_results, _, work = tools.ocr_pipelines.ocr_tables(tables, work, language)
-    gdt_results, _, work = tools.ocr_pipelines.ocr_gdt(work, gdt_boxes, recognizer_gdt)
+    gdt_results, gdt_blocks, work = tools.ocr_pipelines.ocr_gdt(work, gdt_boxes, recognizer_gdt)
+    page = work
     if frame:
         work = work[frame.y: frame.y + frame.h, frame.x: frame.x + frame.w]
     dimensions, other_info, _, _ = tools.ocr_pipelines.ocr_dimensions(
-        work, detector, recognizer_dim, alphabet_dim, frame, dim_boxes, cluster_thres=20, max_img_size=1048, language=language, backg_save=False)
-    return {"gdt": [g[0] for g in gdt_results],
-            "dimensions": [d[0] for d in dimensions],
-            "other": [o[0] for o in other_info],
+        work, detector, recognizer_dim, alphabet_dim, frame, dim_boxes, cluster_thres=20, max_img_size=max_img_size, language=language, backg_save=False)
+    # dimensions are found inside the drawing frame; put their boxes back on the page
+    def on_page(b, f):
+        return (np.asarray(b, dtype=float) + [f.x, f.y]).tolist() if f else np.asarray(b, dtype=float).tolist()
+    dimensions = [(d[0], on_page(d[1], frame)) for d in dimensions]
+    other_info = [(o[0], on_page(o[1], frame)) for o in other_info]
+
+    def outside(box, f):
+        b = np.asarray(box, dtype=float)
+        x, y = b[:, 0].mean(), b[:, 1].mean()
+        return not (f.x <= x <= f.x + f.w and f.y <= y <= f.y + f.h)
+
+    if outer and (outer.w > frame.w or outer.h > frame.h):
+        # the ring: the page with the inside of the innermost frame (read above) blanked
+        ring = page[outer.y: outer.y + outer.h, outer.x: outer.x + outer.w].copy()
+        ring[max(frame.y - outer.y, 0): frame.y - outer.y + frame.h, max(frame.x - outer.x, 0): frame.x - outer.x + frame.w] = 255
+        ring_boxes = [d for d in dim_boxes if outside([[d.x, d.y], [d.x + d.w, d.y + d.h]], frame)]
+        d2, o2, _, _ = tools.ocr_pipelines.ocr_dimensions(
+            ring, detector, recognizer_dim, alphabet_dim, outer, ring_boxes, cluster_thres=20, max_img_size=max_img_size, language=language, backg_save=False)
+        # two characters or fewer in the ring (spaces aside): a zone letter or number, a note's number
+        keep = lambda t: len("".join(t.split())) > 2
+        dimensions += [(t, on_page(b, outer)) for t, b in d2 if keep(t)]
+        other_info += [(t, on_page(b, outer)) for t, b in o2 if keep(t)]
+
+    def block_box(block):
+        cells = [c for v in block.values() for c in v]
+        x0, y0 = min(c.x for c in cells), min(c.y for c in cells)
+        x1, y1 = max(c.x + c.w for c in cells), max(c.y + c.h for c in cells)
+        return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
+    if outer:
+        # GD&T frames are kept only when they read as frames: the cell groups of a revision block
+        # or title block look like frames to the segmentation, wherever the border is found
+        kept = [(g, b) for g, b in zip(gdt_results, gdt_blocks) if looks_like_frame(g[0])]
+        gdt_results, gdt_blocks = [g for g, _ in kept], [b for _, b in kept]
+    return {"gdt": [{"text": g[0], "box": block_box(b)} for g, b in zip(gdt_results, gdt_blocks)],
+            "dimensions": [{"text": t, "box": b} for t, b in dimensions],
+            "other": [{"text": t, "box": b} for t, b in other_info],
             "tables": [" ".join(t["text"] for t in table) for table in table_results]}
+
 
 
 def number(s):
@@ -230,12 +349,10 @@ def run(args):
         sys.exit("Tesseract not found: run doctor")
     if missing_languages():
         sys.exit(f"Tesseract languages missing ({', '.join(missing_languages())}): run setup")
-    t0 = time.time()
-    models = load_models("cpu" if args.cpu else None, args.keras_detector)
-    print(f"models loaded in {time.time() - t0:.0f} s", flush=True)
+    models = None   # loaded at the first page that needs recognising
 
-    rows, failed, seconds = [], 0, []
-    for name, img in pages(args.inputs, args.dpi):
+    rows, failed, seconds, from_text = [], 0, [], 0
+    for name, img, runs in pages(args.inputs, args.dpi, use_text=not args.ocr):
         out_json = os.path.join(args.out, name + ".json")
         if args.skip_done and os.path.exists(out_json):
             continue
@@ -243,7 +360,21 @@ def run(args):
         try:
             if img is None:
                 raise ValueError("could not read the image")
-            r = read_page(img, models)
+            if runs is not None:
+                full = textlayer.read_text_page(img, runs)
+                r = {k: [i["text"] for i in v] if k != "tables" else v for k, v in full.items()}
+                r["source"] = "text layer"
+                from_text += 1
+            else:
+                if models is None:
+                    t0 = time.time()
+                    models = load_models("cpu" if args.cpu else None, args.keras, args.models)
+                    print(f"models loaded in {time.time() - t0:.0f} s", flush=True)
+                    t = time.time()
+                from edocr2 import postfix
+                fixes = () if args.no_fixes else postfix.DEFAULT + (("join_lines",) if args.join_lines else ())
+                r = read_page(img, models, fixes=fixes)
+                r["source"] = "ocr"
             r["seconds"] = round(time.time() - t, 1)
             with open(out_json, "w", encoding="utf-8") as f:
                 json.dump(r, f, ensure_ascii=False, indent=1)
@@ -267,7 +398,7 @@ def run(args):
     def count(key, test):
         return sum(1 for r in rows if r[key] is not None and test(r[key]))
     totals = {
-        "pagesRead": len(rows), "pagesFailed": failed,
+        "pagesRead": len(rows), "pagesFailed": failed, "pagesReadFromTheirTextLayer": from_text,
         "medianSecondsPerPage": statistics.median(seconds) if seconds else None,
         "pagesWith": {
             "GD&T frames": count("frames", lambda v: v > 0),
@@ -297,7 +428,20 @@ def main(argv=None):
     r.add_argument("--out", required=True, help="folder for the results")
     r.add_argument("--dpi", type=int, default=300, help="resolution PDFs are rendered at (default 300)")
     r.add_argument("--cpu", action="store_true", help="run the detector on the CPU even when there is a GPU")
-    r.add_argument("--keras-detector", action="store_true", help="use the original TensorFlow detector (slow)")
+    r.add_argument("--keras", action="store_true", help="use the original TensorFlow detector and recognizers (slow)")
     r.add_argument("--skip-done", action="store_true", help="skip pages already in --out")
+    r.add_argument("--ocr", action="store_true", help="recognise every page, even PDF pages that carry their own text")
+    r.add_argument("--no-fixes", action="store_true", help="leave out the corrections in edocr2/postfix.py")
+    r.add_argument("--join-lines", action="store_true", help="also join the words of one callout read apart (4x M12 6G)")
+    r.add_argument("--models", help="folder with recognizer_gdts.pt and recognizer_dimensions_2.pt to use instead of edocr2/models")
+    e = sub.add_parser("export-onnx", help="write the models as ONNX, for a browser")
+    e.add_argument("--out", required=True, help="folder for the .onnx files and alphabets.json")
+    e.add_argument("--models", help="folder with the PyTorch recognizers to export instead of the default ones")
     args = p.parse_args(argv)
-    return {"doctor": doctor, "setup": setup, "run": run}[args.command](args)
+    return {"doctor": doctor, "setup": setup, "run": run, "export-onnx": export_onnx}[args.command](args)
+
+
+def export_onnx(args):
+    from edocr2 import onnx_export
+    onnx_export.export(args.out, args.models)
+    return 0

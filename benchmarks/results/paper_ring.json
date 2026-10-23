@@ -1,0 +1,47 @@
+{
+ "drawings": 7,
+ "seconds_per_drawing": 10.5,
+ "micro": {
+  "precision": 0.931,
+  "recall": 0.9354,
+  "char_recall": 99.6753,
+  "CER": 0.0032
+ },
+ "macro": {
+  "precision": 0.9494,
+  "recall": 0.9375,
+  "IoU": 0.8681,
+  "char_recall": 99.7555,
+  "CER": 0.0024
+ },
+ "per_drawing": {
+  "Adapterplatte": {
+   "recall": 1.0,
+   "precision": 1.0
+  },
+  "BM_part": {
+   "recall": 0.889,
+   "precision": 1.0
+  },
+  "Candle_holder": {
+   "recall": 0.917,
+   "precision": 1.0
+  },
+  "Gripper": {
+   "recall": 0.909,
+   "precision": 0.909
+  },
+  "LIU0010": {
+   "recall": 1.0,
+   "precision": 0.941
+  },
+  "example_dwg": {
+   "recall": 1.0,
+   "precision": 0.833
+  },
+  "halter": {
+   "recall": 0.833,
+   "precision": 0.833
+  }
+ }
+}

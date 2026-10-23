@@ -1,0 +1,376 @@
+{
+ "clean": {
+  "sheets": 16,
+  "failed": 0,
+  "seconds_per_sheet": 16.3,
+  "scores": {
+   "finish: Ra": {
+    "right": 14,
+    "of": 16,
+    "pct": 87.5
+   },
+   "finish: fully right": {
+    "right": 14,
+    "of": 16,
+    "pct": 87.5
+   },
+   "frame: datums": {
+    "right": 70,
+    "of": 70,
+    "pct": 100.0
+   },
+   "frame: frame found": {
+    "right": 116,
+    "of": 116,
+    "pct": 100.0
+   },
+   "frame: fully right": {
+    "right": 50,
+    "of": 116,
+    "pct": 43.1
+   },
+   "frame: symbol": {
+    "right": 98,
+    "of": 116,
+    "pct": 84.5
+   },
+   "frame: value": {
+    "right": 60,
+    "of": 116,
+    "pct": 51.7
+   },
+   "location: fully right": {
+    "right": 3,
+    "of": 6,
+    "pct": 50.0
+   },
+   "location: nominal": {
+    "right": 3,
+    "of": 6,
+    "pct": 50.0
+   },
+   "note: fully right": {
+    "right": 8,
+    "of": 16,
+    "pct": 50.0
+   },
+   "note: text": {
+    "right": 8,
+    "of": 16,
+    "pct": 50.0
+   },
+   "reference distance: fully right": {
+    "right": 5,
+    "of": 5,
+    "pct": 100.0
+   },
+   "reference distance: nominal": {
+    "right": 5,
+    "of": 5,
+    "pct": 100.0
+   },
+   "size hole note: MAX": {
+    "right": 1,
+    "of": 1,
+    "pct": 100.0
+   },
+   "size hole note: MIN": {
+    "right": 1,
+    "of": 1,
+    "pct": 100.0
+   },
+   "size hole note: THRU": {
+    "right": 7,
+    "of": 7,
+    "pct": 100.0
+   },
+   "size hole note: count": {
+    "right": 5,
+    "of": 7,
+    "pct": 71.4
+   },
+   "size hole note: counterbore Ø": {
+    "right": 4,
+    "of": 5,
+    "pct": 80.0
+   },
+   "size hole note: depth": {
+    "right": 6,
+    "of": 7,
+    "pct": 85.7
+   },
+   "size hole note: deviations": {
+    "right": 5,
+    "of": 5,
+    "pct": 100.0
+   },
+   "size hole note: fit class": {
+    "right": 2,
+    "of": 3,
+    "pct": 66.7
+   },
+   "size hole note: fully right": {
+    "right": 5,
+    "of": 9,
+    "pct": 55.6
+   },
+   "size hole note: limits": {
+    "right": 1,
+    "of": 1,
+    "pct": 100.0
+   },
+   "size hole note: nominal": {
+    "right": 6,
+    "of": 8,
+    "pct": 75.0
+   },
+   "size: deviations": {
+    "right": 1,
+    "of": 1,
+    "pct": 100.0
+   },
+   "size: fully right": {
+    "right": 6,
+    "of": 10,
+    "pct": 60.0
+   },
+   "size: nominal": {
+    "right": 6,
+    "of": 10,
+    "pct": 60.0
+   },
+   "thread note: MAX": {
+    "right": 2,
+    "of": 2,
+    "pct": 100.0
+   },
+   "thread note: MIN": {
+    "right": 1,
+    "of": 2,
+    "pct": 50.0
+   },
+   "thread note: THRU": {
+    "right": 22,
+    "of": 22,
+    "pct": 100.0
+   },
+   "thread note: count": {
+    "right": 31,
+    "of": 31,
+    "pct": 100.0
+   },
+   "thread note: counterbore Ø": {
+    "right": 5,
+    "of": 8,
+    "pct": 62.5
+   },
+   "thread note: depth": {
+    "right": 15,
+    "of": 16,
+    "pct": 93.8
+   },
+   "thread note: fully right": {
+    "right": 19,
+    "of": 32,
+    "pct": 59.4
+   },
+   "thread note: pitch": {
+    "right": 2,
+    "of": 7,
+    "pct": 28.6
+   },
+   "thread note: size": {
+    "right": 23,
+    "of": 32,
+    "pct": 71.9
+   }
+  }
+ },
+ "scan": {
+  "sheets": 16,
+  "failed": 0,
+  "seconds_per_sheet": 15.4,
+  "scores": {
+   "finish: Ra": {
+    "right": 13,
+    "of": 16,
+    "pct": 81.2
+   },
+   "finish: fully right": {
+    "right": 13,
+    "of": 16,
+    "pct": 81.2
+   },
+   "frame: datums": {
+    "right": 63,
+    "of": 70,
+    "pct": 90.0
+   },
+   "frame: frame found": {
+    "right": 107,
+    "of": 116,
+    "pct": 92.2
+   },
+   "frame: fully right": {
+    "right": 55,
+    "of": 116,
+    "pct": 47.4
+   },
+   "frame: symbol": {
+    "right": 91,
+    "of": 116,
+    "pct": 78.4
+   },
+   "frame: value": {
+    "right": 65,
+    "of": 116,
+    "pct": 56.0
+   },
+   "location: fully right": {
+    "right": 3,
+    "of": 6,
+    "pct": 50.0
+   },
+   "location: nominal": {
+    "right": 3,
+    "of": 6,
+    "pct": 50.0
+   },
+   "note: fully right": {
+    "right": 9,
+    "of": 16,
+    "pct": 56.2
+   },
+   "note: text": {
+    "right": 9,
+    "of": 16,
+    "pct": 56.2
+   },
+   "reference distance: fully right": {
+    "right": 5,
+    "of": 5,
+    "pct": 100.0
+   },
+   "reference distance: nominal": {
+    "right": 5,
+    "of": 5,
+    "pct": 100.0
+   },
+   "size hole note: MAX": {
+    "right": 1,
+    "of": 1,
+    "pct": 100.0
+   },
+   "size hole note: MIN": {
+    "right": 1,
+    "of": 1,
+    "pct": 100.0
+   },
+   "size hole note: THRU": {
+    "right": 7,
+    "of": 7,
+    "pct": 100.0
+   },
+   "size hole note: count": {
+    "right": 6,
+    "of": 7,
+    "pct": 85.7
+   },
+   "size hole note: counterbore Ø": {
+    "right": 3,
+    "of": 5,
+    "pct": 60.0
+   },
+   "size hole note: depth": {
+    "right": 7,
+    "of": 7,
+    "pct": 100.0
+   },
+   "size hole note: deviations": {
+    "right": 5,
+    "of": 5,
+    "pct": 100.0
+   },
+   "size hole note: fit class": {
+    "right": 2,
+    "of": 3,
+    "pct": 66.7
+   },
+   "size hole note: fully right": {
+    "right": 4,
+    "of": 9,
+    "pct": 44.4
+   },
+   "size hole note: limits": {
+    "right": 0,
+    "of": 1,
+    "pct": 0.0
+   },
+   "size hole note: nominal": {
+    "right": 6,
+    "of": 8,
+    "pct": 75.0
+   },
+   "size: deviations": {
+    "right": 1,
+    "of": 1,
+    "pct": 100.0
+   },
+   "size: fully right": {
+    "right": 6,
+    "of": 10,
+    "pct": 60.0
+   },
+   "size: nominal": {
+    "right": 6,
+    "of": 10,
+    "pct": 60.0
+   },
+   "thread note: MAX": {
+    "right": 2,
+    "of": 2,
+    "pct": 100.0
+   },
+   "thread note: MIN": {
+    "right": 1,
+    "of": 2,
+    "pct": 50.0
+   },
+   "thread note: THRU": {
+    "right": 20,
+    "of": 22,
+    "pct": 90.9
+   },
+   "thread note: count": {
+    "right": 28,
+    "of": 31,
+    "pct": 90.3
+   },
+   "thread note: counterbore Ø": {
+    "right": 6,
+    "of": 8,
+    "pct": 75.0
+   },
+   "thread note: depth": {
+    "right": 14,
+    "of": 16,
+    "pct": 87.5
+   },
+   "thread note: fully right": {
+    "right": 18,
+    "of": 32,
+    "pct": 56.2
+   },
+   "thread note: pitch": {
+    "right": 0,
+    "of": 7,
+    "pct": 0.0
+   },
+   "thread note: size": {
+    "right": 22,
+    "of": 32,
+    "pct": 68.8
+   }
+  }
+ }
+}
