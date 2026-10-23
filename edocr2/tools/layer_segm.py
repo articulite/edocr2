@@ -144,6 +144,14 @@ def find_frame(img, frame_thres):
     Returns:
     - best_frame: A Rect object representing the detected frame, or None if no valid frame is found.
     """
+    return find_frames(img, frame_thres)[0]
+
+
+def find_frames(img, frame_thres):
+    """The innermost and the outermost frame (Rect, or None for both): of the long lines across
+    the sheet, the closest and the farthest pair at least frame_thres of the sheet apart. The
+    innermost can be a line inside the border (a view outline, a zone line), with callouts
+    outside it; the outermost takes them in, and the zone marks along the border with them."""
     from scipy.signal import find_peaks
 
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -188,11 +196,11 @@ def find_frame(img, frame_thres):
     cv2.imwrite('frame.png', tmp)'''
     # Ensure we have enough peaks to define a box
     if len(v_peaks) < 2 or len(h_peaks) < 2:
-        return None  # Not enough peaks to define a frame
+        return None, None  # Not enough peaks to define a frame
 
     min_frame_tup = (img.shape[0] * frame_thres, img.shape[1] * frame_thres) #(y,x)
     
-    def find_best_peaks(peaks, v_h): #v_h is a int= 0 or 1 to identify if we are talking vertical or horizontal peaks
+    def find_best_peaks(peaks, v_h, outermost=False): #v_h is a int= 0 or 1 to identify if we are talking vertical or horizontal peaks
         """
         Identifies the best pair of peaks to define a frame along a given dimension.
 
@@ -209,7 +217,7 @@ def find_frame(img, frame_thres):
         diff_matrix = np.subtract.outer(max_peaks, min_peaks)
         valid_diff_mask = (diff_matrix > min_frame)
         if np.any(valid_diff_mask):
-            min_diff = np.min(diff_matrix[valid_diff_mask])
+            min_diff = (np.max if outermost else np.min)(diff_matrix[valid_diff_mask])
             # Find the index of the minimum difference
             min_diff_index = np.where(diff_matrix == min_diff)
             max_idx, min_idx = min_diff_index[0][0], min_diff_index[1][0]
@@ -217,15 +225,15 @@ def find_frame(img, frame_thres):
             min_p = min_peaks[min_idx]
             return max_p, min_p
     
-    # Return the best (innermost) frame found
-    rows, cols = find_best_peaks(h_peaks, 0), find_best_peaks(v_peaks, 1)
-    if rows is None or cols is None:
-        return None  # No pair of lines far enough apart
-    bottom, top = rows
-    right, left = cols
-    best_frame = Rect('frame', left, top, right - left, bottom - top)
-   
-    return best_frame
+    frames = []
+    for outermost in (False, True):
+        rows, cols = find_best_peaks(h_peaks, 0, outermost), find_best_peaks(v_peaks, 1, outermost)
+        if rows is None or cols is None:
+            return None, None  # No pair of lines far enough apart
+        bottom, top = rows
+        right, left = cols
+        frames.append(Rect('frame', left, top, right - left, bottom - top))
+    return frames[0], frames[1]
 
 def touching_box(cl, cl_fire, thres=1.1):
     '''returns true if cl is adjacent to cl_fire, a threshold ratio is applied to scale up cl
@@ -360,20 +368,30 @@ def cluster_criteria(clusters, singles,  GDT_thres):
                 dim.append(sl)
     return gdt, tab, dim
 
-def segment_img(img, frame_thres = 0.85, autoframe = True, GDT_thres = 0.02, binary_thres = 127):
-    
+def segment_img(img, frame_thres = 0.85, autoframe = True, GDT_thres = 0.02, binary_thres = 127, border = "inner"):
+    """border="outer" takes the outermost frame instead of the innermost (see find_frames) and
+    keeps the innermost as frame.inner, for telling zone marks from callouts; border="page"
+    takes the whole page, keeping the innermost (or assumed) frame as frame.inner."""
     #Find rectangles
     img_boxes, rect_list, _  = find_rectangles(img, binary_thres= binary_thres)
     #print_hierarchy(hierarchy)
     frame = False
     if autoframe:
-        frame = find_frame(img, frame_thres)
+        inner, outer = find_frames(img, frame_thres)
+        frame = outer if border == "outer" else inner
+        if frame:
+            frame.inner = inner
     clusters, singles = find_clusters(rect_list)
 
     gdt_boxes, tables, dim_boxes = cluster_criteria(clusters, singles, GDT_thres * img.shape[0] * img.shape[1])
 
     if not frame:
         frame = Rect('frame', int(img.shape[1] * (1-frame_thres)/2), int(img.shape[0] * (1-frame_thres)/2), int(img.shape[1] * frame_thres), int(img.shape[0] * frame_thres))
+    if border == "page":
+        # the whole page, with the (innermost or assumed) frame kept as frame.inner
+        page = Rect('page', 0, 0, img.shape[1], img.shape[0])
+        page.inner = frame
+        frame = page
 
     filtered_gdt_boxes = [
         {cluster: rects} for g in gdt_boxes

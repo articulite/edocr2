@@ -49,10 +49,13 @@ def _inside(run, rect, margin=2):
 DIMENSION = re.compile(r"^(?=.*\d).{1,40}$")
 
 
-def read_text_page(img, runs):
-    """The same result as cli.read_page(..., boxes=True), from the page's text runs."""
+def read_text_page(img, runs, border=None):
+    """The same result as cli.read_page(..., boxes=True), from the page's text runs. border: as
+    read_page's: with "ring", GD&T frames anywhere on the page count."""
+    import os
     from edocr2 import tools
-    _, frame, gdt_boxes, tables, _ = tools.layer_segm.segment_img(img, autoframe=True, frame_thres=0.7, GDT_thres=0.02, binary_thres=127)
+    border = border or os.environ.get("EDOCR2_BORDER", "inner")
+    _, frame, gdt_boxes, tables, _ = tools.layer_segm.segment_img(img, autoframe=True, frame_thres=0.7, GDT_thres=0.02, binary_thres=127, border="page" if border == "ring" else "inner")
     used = set()
     gdt = []
     for block in gdt_boxes:

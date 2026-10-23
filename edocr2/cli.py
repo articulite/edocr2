@@ -214,42 +214,93 @@ def load_models(device, keras=False, folder=None):
     return recognizer_gdt, recognizer_dim, alphabet_dim, Detector()
 
 
-def read_page(img, models, language="eng", boxes=False, max_img_size=1048, fixes=None):
+def read_page(img, models, language="eng", boxes=False, max_img_size=1048, fixes=None, border=None):
     """The steps of test_drawing.py, without the language-model ones, then the corrections in
     edocr2/postfix.py (its DEFAULT unless `fixes` names which; () for none). With boxes=True
-    each item is {"text", "box"}, the box as four corner points in page pixels."""
+    each item is {"text", "box"}, the box as four corner points in page pixels.
+
+    border: "inner" reads inside the innermost frame found, as the original. "ring" does that,
+    then also reads the rest of the page around it, where callouts sit when that frame is a line
+    inside the border (the border itself is not always found); there, marks of one or two
+    characters (zone letters and numbers) are dropped. What "inner" reads is unchanged.
+    None: $EDOCR2_BORDER, else "inner"."""
     from edocr2 import postfix
-    r = _read_page(img, models, language, max_img_size)
+    r = _read_page(img, models, language, max_img_size, border or os.environ.get("EDOCR2_BORDER", "inner"))
     postfix.apply(r, postfix.DEFAULT if fixes is None else fixes)
     if boxes:
         return r
     return {k: [i["text"] for i in v] if k != "tables" else v for k, v in r.items()}
 
 
-def _read_page(img, models, language, max_img_size):
+# the geometric characteristics, as the GD&T recognizer writes them
+GDT_SYMBOLS = "⏤⏥○⌭⌒⌓⏊∠⫽⌯⌖◎↗⌰"
+
+
+def looks_like_frame(text):
+    """Every line a frame: one characteristic symbol, then a cell with a number in it."""
+    for line in text.split("\n"):
+        cells = line.split("|")
+        if len(cells) < 2 or len(cells[0]) != 1 or cells[0] not in GDT_SYMBOLS or not any(c.isdigit() for c in cells[1]):
+            return False
+    return True
+
+
+def _read_page(img, models, language, max_img_size, border="inner"):
     import numpy as np
     from edocr2 import tools
     recognizer_gdt, recognizer_dim, alphabet_dim, detector = models
-    _, frame, gdt_boxes, tables, dim_boxes = tools.layer_segm.segment_img(img, autoframe=True, frame_thres=0.7, GDT_thres=0.02, binary_thres=127)
+    # with "ring": the whole page, the innermost frame in frame.inner, and every GD&T frame
+    _, frame, gdt_boxes, tables, dim_boxes = tools.layer_segm.segment_img(
+        img, autoframe=True, frame_thres=0.7, GDT_thres=0.02, binary_thres=127, border="page" if border == "ring" else "inner")
+    outer = frame if border == "ring" and getattr(frame, "inner", None) else None
+    if outer:
+        frame = outer.inner
     work = img.copy()
     table_results, _, work = tools.ocr_pipelines.ocr_tables(tables, work, language)
     gdt_results, gdt_blocks, work = tools.ocr_pipelines.ocr_gdt(work, gdt_boxes, recognizer_gdt)
+    page = work
     if frame:
         work = work[frame.y: frame.y + frame.h, frame.x: frame.x + frame.w]
     dimensions, other_info, _, _ = tools.ocr_pipelines.ocr_dimensions(
         work, detector, recognizer_dim, alphabet_dim, frame, dim_boxes, cluster_thres=20, max_img_size=max_img_size, language=language, backg_save=False)
     # dimensions are found inside the drawing frame; put their boxes back on the page
-    dx, dy = (frame.x, frame.y) if frame else (0, 0)
-    on_page = lambda b: (np.asarray(b, dtype=float) + [dx, dy]).tolist()
+    def on_page(b, f):
+        return (np.asarray(b, dtype=float) + [f.x, f.y]).tolist() if f else np.asarray(b, dtype=float).tolist()
+    dimensions = [(d[0], on_page(d[1], frame)) for d in dimensions]
+    other_info = [(o[0], on_page(o[1], frame)) for o in other_info]
+
+    def outside(box, f):
+        b = np.asarray(box, dtype=float)
+        x, y = b[:, 0].mean(), b[:, 1].mean()
+        return not (f.x <= x <= f.x + f.w and f.y <= y <= f.y + f.h)
+
+    if outer and (outer.w > frame.w or outer.h > frame.h):
+        # the ring: the page with the inside of the innermost frame (read above) blanked
+        ring = page[outer.y: outer.y + outer.h, outer.x: outer.x + outer.w].copy()
+        ring[max(frame.y - outer.y, 0): frame.y - outer.y + frame.h, max(frame.x - outer.x, 0): frame.x - outer.x + frame.w] = 255
+        ring_boxes = [d for d in dim_boxes if outside([[d.x, d.y], [d.x + d.w, d.y + d.h]], frame)]
+        d2, o2, _, _ = tools.ocr_pipelines.ocr_dimensions(
+            ring, detector, recognizer_dim, alphabet_dim, outer, ring_boxes, cluster_thres=20, max_img_size=max_img_size, language=language, backg_save=False)
+        # two characters or fewer in the ring (spaces aside): a zone letter or number, a note's number
+        keep = lambda t: len("".join(t.split())) > 2
+        dimensions += [(t, on_page(b, outer)) for t, b in d2 if keep(t)]
+        other_info += [(t, on_page(b, outer)) for t, b in o2 if keep(t)]
+
     def block_box(block):
         cells = [c for v in block.values() for c in v]
         x0, y0 = min(c.x for c in cells), min(c.y for c in cells)
         x1, y1 = max(c.x + c.w for c in cells), max(c.y + c.h for c in cells)
         return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
+    if outer:
+        # GD&T frames are kept only when they read as frames: the cell groups of a revision block
+        # or title block look like frames to the segmentation, wherever the border is found
+        kept = [(g, b) for g, b in zip(gdt_results, gdt_blocks) if looks_like_frame(g[0])]
+        gdt_results, gdt_blocks = [g for g, _ in kept], [b for _, b in kept]
     return {"gdt": [{"text": g[0], "box": block_box(b)} for g, b in zip(gdt_results, gdt_blocks)],
-            "dimensions": [{"text": d[0], "box": on_page(d[1])} for d in dimensions],
-            "other": [{"text": o[0], "box": on_page(o[1])} for o in other_info],
+            "dimensions": [{"text": t, "box": b} for t, b in dimensions],
+            "other": [{"text": t, "box": b} for t, b in other_info],
             "tables": [" ".join(t["text"] for t in table) for table in table_results]}
+
 
 
 def number(s):
@@ -383,5 +434,14 @@ def main(argv=None):
     r.add_argument("--no-fixes", action="store_true", help="leave out the corrections in edocr2/postfix.py")
     r.add_argument("--join-lines", action="store_true", help="also join the words of one callout read apart (4x M12 6G)")
     r.add_argument("--models", help="folder with recognizer_gdts.pt and recognizer_dimensions_2.pt to use instead of edocr2/models")
+    e = sub.add_parser("export-onnx", help="write the models as ONNX, for a browser")
+    e.add_argument("--out", required=True, help="folder for the .onnx files and alphabets.json")
+    e.add_argument("--models", help="folder with the PyTorch recognizers to export instead of the default ones")
     args = p.parse_args(argv)
-    return {"doctor": doctor, "setup": setup, "run": run}[args.command](args)
+    return {"doctor": doctor, "setup": setup, "run": run, "export-onnx": export_onnx}[args.command](args)
+
+
+def export_onnx(args):
+    from edocr2 import onnx_export
+    onnx_export.export(args.out, args.models)
+    return 0

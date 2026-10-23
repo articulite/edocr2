@@ -9,6 +9,8 @@ diameter_z     Z before a number is the diameter sign (Z12.5, 4xZ6.6): the relea
                writes Z for a ⌀ it does not know.
 six_b          B touching a digit, or after M, or starting a thread class, is a 6 (MB, M1B, 22.8B,
                BH): the commonest confusion in single-stroke lettering.
+drop_marks     "Other" text with no letter or digit (centre marks read as ++, empty Tesseract reads)
+               is dropped.
 join_lines     Pieces of one callout read apart (the detector boxes words separately) are joined
                left to right where they stand on one line close together; pieces stacked one
                above the other at the same place (limits, deviations) are joined with '/'.
@@ -18,7 +20,7 @@ import re
 
 import numpy as np
 
-ALL = ("frame_decimal", "diameter_z", "six_b", "join_lines")
+ALL = ("frame_decimal", "diameter_z", "six_b", "drop_marks", "join_lines")
 # Measured with benchmarks/ablate.py on the released recognizers: frame_decimal took GD&T values
 # read right on held-out drawgen sheets from 52% to 100% (scanned 56% to 86%), six_b thread sizes
 # from 72% to 97% and sizes from 60% to 90%, both with no change on the paper's benchmark.
@@ -45,6 +47,11 @@ def six_b(text):
     # a thread size: M starting a word (MB, 4xMB), not NUMBER
     text = re.sub(r"(?<![A-WYZa-wyz])MB", "M6", text)   # after a count's x (4xMB) too
     return re.sub(r"(^|[-\s])B(?=[HGhg]\b)", r"\g<1>6", text)
+
+
+def has_word(text):
+    """A letter or a digit somewhere: "other" text without one is a mark read as text (++, "")."""
+    return re.search(r"[^\W_]", text) is not None
 
 
 def _bbox(item):
@@ -124,6 +131,8 @@ def apply(result, fixes=DEFAULT):
             d["text"] = diameter_z(d["text"])
         if "six_b" in fixes:
             d["text"] = six_b(d["text"])
+    if "drop_marks" in fixes:
+        result["other"] = [o for o in result["other"] if has_word(o["text"])]
     if "join_lines" in fixes:
         result["dimensions"] = join_lines(result["dimensions"])
     return result
