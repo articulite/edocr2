@@ -24,6 +24,8 @@ MODEL_FILES = ["recognizer_gdts.keras", "recognizer_gdts.txt", "recognizer_dimen
 TESSDATA_URL = "https://github.com/tesseract-ocr/tessdata/raw/main/{}.traineddata"
 LANGUAGES = ["eng", "osd", "nor"]
 IMAGE_TYPES = (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp")
+# the released dimension recognizer's alphabet: what a box may contain to be routed as a dimension
+ROUTING_BASE = "0123456789AaBCDRGHhMmnxZt(),.+-±:/°\"⌀="
 
 
 # ───────────────────────── finding things ─────────────────────────
@@ -173,7 +175,12 @@ def load_models(device, keras=False, folder=None):
         folder = folder or MODELS
         recognizer_gdt = TorchRecognizer.load(os.path.join(folder, "recognizer_gdts.pt"), device)
         recognizer_dim = TorchRecognizer.load(os.path.join(folder, "recognizer_dimensions_2.pt"), device)
-        return recognizer_gdt, recognizer_dim, recognizer_dim.alphabet, TorchDetector(device=device)
+        # The third item is the alphabet the pipeline routes boxes by, not the recognizer's:
+        # a widened recognizer would otherwise pull title blocks and notes in as dimensions.
+        routing = recognizer_dim.alphabet
+        if len(routing) > len(ROUTING_BASE):
+            routing = ROUTING_BASE + "XTUIN↧⌴⌵□×"
+        return recognizer_gdt, recognizer_dim, routing, TorchDetector(device=device)
     os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
     import logging
     logging.getLogger("tensorflow").setLevel(logging.ERROR)   # before the import, which already warns

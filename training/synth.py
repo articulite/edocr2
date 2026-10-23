@@ -39,8 +39,14 @@ def dimension_text(rng):
     comma = rng.random() < 0.2
     n = lambda: number(rng, comma)
     pick = rng.random()
-    if pick < 0.12:
+    if pick < 0.06:
         return f"{rng.randint(2, 30)}X"
+    if pick < 0.12:
+        # counts as eDOCr2's own drawings write them: 4x⌀6.60, 2x⌀19,9, 3x
+        return f"{rng.randint(2, 12)}x" + (f"⌀{n()}" if rng.random() < 0.7 else "")
+    if rng.random() < 0.12:
+        # deviations as written beside a size: +0.40, -0.10, 0
+        return rng.choice(["+", "-"]) + f"0{',' if comma else '.'}{rng.randint(1, 99):02d}" if rng.random() < 0.8 else "0"
     if pick < 0.25:
         return f"⌀{n()}"
     if pick < 0.35:
