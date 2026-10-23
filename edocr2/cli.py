@@ -54,6 +54,14 @@ def use_tesseract():
 
 
 TORCH_MODELS = ["recognizer_gdts.pt", "recognizer_dimensions_2.pt"]
+# The recognizers fine-tuned on drawgen sheets (training/), used when present; see README.
+FINETUNED = os.path.join(MODELS, "finetuned")
+FINETUNED_URL = "https://github.com/articulite/edocr2/releases/download/finetuned-v2/"
+
+
+def model_folder():
+    """The fine-tuned recognizers if they are here, else the released ones."""
+    return FINETUNED if all(os.path.isfile(os.path.join(FINETUNED, f)) for f in TORCH_MODELS) else MODELS
 
 
 def missing_models():
@@ -98,6 +106,7 @@ def doctor(args):
     line("languages", not langs, f"{', '.join(LANGUAGES)} in {TESSDATA}" if not langs else f"missing {', '.join(langs)}; run setup")
     models = missing_models()
     line("models", not models, MODELS if not models else f"missing {', '.join(models)}; run setup")
+    line("recognizers", True, "fine-tuned (" + FINETUNED + ")" if model_folder() == FINETUNED else "released (no fine-tuned ones found)")
     print("ready" if ok else "not ready: fix the lines marked !!")
     return 0 if ok else 1
 
@@ -131,6 +140,14 @@ def setup(args):
             print(f"  copied {lang} from {system}")
         else:
             download(TESSDATA_URL.format(lang), os.path.join(TESSDATA, f"{lang}.traineddata"))
+    # the fine-tuned recognizers, where they have been published; the released ones otherwise
+    if model_folder() != FINETUNED:
+        os.makedirs(FINETUNED, exist_ok=True)
+        try:
+            for f in TORCH_MODELS:
+                download(FINETUNED_URL + f, os.path.join(FINETUNED, f))
+        except Exception as e:
+            print(f"  fine-tuned recognizers not available ({e}); using the released ones")
     # the detector's weights are fetched and checked on first use; do it now so `run` works offline
     from edocr2.keras_ocr import craft, tools
     cfg = craft.PRETRAINED_WEIGHTS[("clovaai_general", True)]
@@ -172,7 +189,7 @@ def load_models(device, keras=False, folder=None):
     if not keras:
         from edocr2.keras_ocr.craft import TorchDetector
         from edocr2.torch_recognizer import TorchRecognizer
-        folder = folder or MODELS
+        folder = folder or model_folder()
         recognizer_gdt = TorchRecognizer.load(os.path.join(folder, "recognizer_gdts.pt"), device)
         recognizer_dim = TorchRecognizer.load(os.path.join(folder, "recognizer_dimensions_2.pt"), device)
         # The third item is the alphabet the pipeline routes boxes by, not the recognizer's:

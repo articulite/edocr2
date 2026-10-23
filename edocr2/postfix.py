@@ -42,7 +42,8 @@ def diameter_z(text):
 
 def six_b(text):
     text = re.sub(r"(?<=\d)B|B(?=\d)", "6", text)
-    text = re.sub(r"(?<=M)B", "6", text)
+    # a thread size: M starting a word (MB, 4xMB), not NUMBER
+    text = re.sub(r"(?<![A-WYZa-wyz])MB", "M6", text)   # after a count's x (4xMB) too
     return re.sub(r"(^|[-\s])B(?=[HGhg]\b)", r"\g<1>6", text)
 
 
@@ -117,12 +118,12 @@ def apply(result, fixes=DEFAULT):
     if "frame_decimal" in fixes:
         for g in result["gdt"]:
             g["text"] = frame_decimal(g["text"])
-    for key in ("dimensions", "other"):
-        for d in result[key]:
-            if "diameter_z" in fixes:
-                d["text"] = diameter_z(d["text"])
-            if "six_b" in fixes:
-                d["text"] = six_b(d["text"])
+    # dimensions only: "other" is notes and titles, where B and Z are letters (NUMBER, ZONE)
+    for d in result["dimensions"]:
+        if "diameter_z" in fixes:
+            d["text"] = diameter_z(d["text"])
+        if "six_b" in fixes:
+            d["text"] = six_b(d["text"])
     if "join_lines" in fixes:
         result["dimensions"] = join_lines(result["dimensions"])
     return result

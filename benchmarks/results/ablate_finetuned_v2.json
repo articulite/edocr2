@@ -1,0 +1,177 @@
+{
+ "none": {
+  "clean": {
+   "frame: value": 100.0,
+   "frame: fully right": 100.0,
+   "thread note: size": 96.9,
+   "thread note: fully right": 96.9,
+   "size: nominal": 90.0,
+   "size hole note: fully right": 66.7,
+   "finish: Ra": 100.0
+  },
+  "scan": {
+   "frame: value": 91.4,
+   "frame: fully right": 86.2,
+   "thread note: size": 93.8,
+   "thread note: fully right": 84.4,
+   "size: nominal": 100.0,
+   "size hole note: fully right": 55.6,
+   "finish: Ra": 93.8
+  },
+  "paper": {
+   "recall": 93.75,
+   "precision": 94.94,
+   "CER": 0.24
+  }
+ },
+ "frame_decimal": {
+  "clean": {
+   "frame: value": 100.0,
+   "frame: fully right": 100.0,
+   "thread note: size": 96.9,
+   "thread note: fully right": 96.9,
+   "size: nominal": 90.0,
+   "size hole note: fully right": 66.7,
+   "finish: Ra": 100.0
+  },
+  "scan": {
+   "frame: value": 91.4,
+   "frame: fully right": 86.2,
+   "thread note: size": 93.8,
+   "thread note: fully right": 84.4,
+   "size: nominal": 100.0,
+   "size hole note: fully right": 55.6,
+   "finish: Ra": 93.8
+  },
+  "paper": {
+   "recall": 93.75,
+   "precision": 94.94,
+   "CER": 0.24
+  }
+ },
+ "diameter_z": {
+  "clean": {
+   "frame: value": 100.0,
+   "frame: fully right": 100.0,
+   "thread note: size": 96.9,
+   "thread note: fully right": 96.9,
+   "size: nominal": 90.0,
+   "size hole note: fully right": 66.7,
+   "finish: Ra": 100.0
+  },
+  "scan": {
+   "frame: value": 91.4,
+   "frame: fully right": 86.2,
+   "thread note: size": 93.8,
+   "thread note: fully right": 84.4,
+   "size: nominal": 100.0,
+   "size hole note: fully right": 55.6,
+   "finish: Ra": 93.8
+  },
+  "paper": {
+   "recall": 93.75,
+   "precision": 94.94,
+   "CER": 0.24
+  }
+ },
+ "six_b": {
+  "clean": {
+   "frame: value": 100.0,
+   "frame: fully right": 100.0,
+   "thread note: size": 96.9,
+   "thread note: fully right": 96.9,
+   "size: nominal": 90.0,
+   "size hole note: fully right": 66.7,
+   "finish: Ra": 100.0
+  },
+  "scan": {
+   "frame: value": 91.4,
+   "frame: fully right": 86.2,
+   "thread note: size": 93.8,
+   "thread note: fully right": 84.4,
+   "size: nominal": 100.0,
+   "size hole note: fully right": 55.6,
+   "finish: Ra": 93.8
+  },
+  "paper": {
+   "recall": 93.75,
+   "precision": 94.94,
+   "CER": 0.24
+  }
+ },
+ "join_lines": {
+  "clean": {
+   "frame: value": 100.0,
+   "frame: fully right": 100.0,
+   "thread note: size": 96.9,
+   "thread note: fully right": 96.9,
+   "size: nominal": 90.0,
+   "size hole note: fully right": 66.7,
+   "finish: Ra": 100.0
+  },
+  "scan": {
+   "frame: value": 91.4,
+   "frame: fully right": 86.2,
+   "thread note: size": 93.8,
+   "thread note: fully right": 84.4,
+   "size: nominal": 100.0,
+   "size hole note: fully right": 55.6,
+   "finish: Ra": 93.8
+  },
+  "paper": {
+   "recall": 87.5,
+   "precision": 94.59,
+   "CER": 7.67
+  }
+ },
+ "default": {
+  "clean": {
+   "frame: value": 100.0,
+   "frame: fully right": 100.0,
+   "thread note: size": 96.9,
+   "thread note: fully right": 96.9,
+   "size: nominal": 90.0,
+   "size hole note: fully right": 66.7,
+   "finish: Ra": 100.0
+  },
+  "scan": {
+   "frame: value": 91.4,
+   "frame: fully right": 86.2,
+   "thread note: size": 93.8,
+   "thread note: fully right": 84.4,
+   "size: nominal": 100.0,
+   "size hole note: fully right": 55.6,
+   "finish: Ra": 93.8
+  },
+  "paper": {
+   "recall": 93.75,
+   "precision": 94.94,
+   "CER": 0.24
+  }
+ },
+ "all": {
+  "clean": {
+   "frame: value": 100.0,
+   "frame: fully right": 100.0,
+   "thread note: size": 96.9,
+   "thread note: fully right": 96.9,
+   "size: nominal": 90.0,
+   "size hole note: fully right": 66.7,
+   "finish: Ra": 100.0
+  },
+  "scan": {
+   "frame: value": 91.4,
+   "frame: fully right": 86.2,
+   "thread note: size": 93.8,
+   "thread note: fully right": 84.4,
+   "size: nominal": 100.0,
+   "size hole note: fully right": 55.6,
+   "finish: Ra": 93.8
+  },
+  "paper": {
+   "recall": 87.5,
+   "precision": 94.59,
+   "CER": 7.67
+  }
+ }
+}

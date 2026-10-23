@@ -23,7 +23,14 @@ def test_z_before_a_number_is_a_diameter():
 
 def test_b_beside_digits_or_after_m_is_a_six():
     assert [six_b(t) for t in ("MB", "M1B", "22.8B", "BH", "M20-BG")] == ["M6", "M16", "22.86", "6H", "M20-6G"]
-    assert [six_b(t) for t in ("B", "AB", "6H")] == ["B", "AB", "6H"]
+    assert [six_b(t) for t in ("B", "AB", "6H", "NUMBER", "4xMB")] == ["B", "AB", "6H", "NUMBER", "4xM6"]
+
+
+def test_notes_and_titles_are_left_alone():
+    from edocr2.postfix import apply
+    r = {"gdt": [], "dimensions": [{"text": "MB", "box": box(0, 0, 1, 1)}], "other": [{"text": "MARK PART NUMBER", "box": box(0, 0, 1, 1)}], "tables": []}
+    apply(r)
+    assert r["dimensions"][0]["text"] == "M6" and r["other"][0]["text"] == "MARK PART NUMBER"
 
 
 def box(x0, y0, x1, y1):
